@@ -2,7 +2,7 @@
  *
  * Le da entrada padrao varios numeros inteiros positivos de tamanhao ate 2 elevado a 64
  * Inicializa threads independentes que calculam a primalidade dos numeros
- * Ha um numero maximo de THREADS independentes, N_THREADS + programa principal
+ * Ha um numero maximo de THREADS independentes, N_THREADS
  *
  * Victor Ferrao Santolim
  * RA 187888
@@ -19,7 +19,7 @@
 //Prototipo da funcao que os threads executam
 void *threadCalcPrimo(void *w);
 
-unsigned long int entrada[100];
+unsigned long int entrada[500];
 int numAteEntao = 0;
 int indice = 0;
 pthread_mutex_t trava;
@@ -27,14 +27,13 @@ pthread_mutex_t trava;
 int main() {
 
 	pthread_t threads[N_THREADS]; //Vetor de threads que calculam nùmeros primos
-	int threadID[N_THREADS];
 	unsigned long int numLido; //Leitura atual
 
     int numPrimos = 0;		 //Numero de primos contado ate o momento
-    int threadsCriadas = 0;
+    int threadsCriadas = 0;  //Threads criadas
 
-    //Zera os vetores iniciais
-    for(int i = 0 ; i < 100; i++)
+    //Zera o vetor inicial
+    for(int i = 0 ; i < 500; i++)
     {
     	entrada[i] = 0;
     }
@@ -45,7 +44,6 @@ int main() {
        scanf("%lu", &numLido); //Pega um numero da entrada
 
        entrada[numAteEntao] = numLido;
-       printf("Pegou da entrada o n = %lu e colocou na posicao %d do vetor entrada\n", numLido , numAteEntao);
        numAteEntao++;
 
 	}while(getchar() != 10); //Enquanto nao pega um \n
@@ -56,8 +54,7 @@ int main() {
   	{
   		for(int i = 0 ; i < numAteEntao ; i++)
   		{
-  			threadID[i] = i;
-  			pthread_create(&(threads[i]), NULL, threadCalcPrimo, (void*)(threadID + i));
+  			pthread_create(&(threads[i]), NULL, threadCalcPrimo, NULL);
   		}
   		threadsCriadas = numAteEntao;
   	}
@@ -65,13 +62,11 @@ int main() {
   	{
   		for(int i = 0 ; i < N_THREADS ; i++)
   		{
-  			threadID[i] = i;
-  			pthread_create(&(threads[i]), NULL, threadCalcPrimo, (void*)(threadID + i));
+  			pthread_create(&(threads[i]), NULL, threadCalcPrimo, NULL);
   		}
   		threadsCriadas = N_THREADS;
   	}
 
-  	printf("chegou 1\n");
 
 	/* Esperando threads */
   	for (int i = 0; i < threadsCriadas; i++) 
@@ -79,7 +74,6 @@ int main() {
     	pthread_join(threads[i], NULL);
 	}
 
-	printf("chegou 2\n");
 
     //Le o vetor com os resultados de primalidade
     for(int i = 0 ; i < numAteEntao ; i++)
@@ -95,23 +89,19 @@ int main() {
 }
 
 //Funcao que eh executada nos threads
-//Verifica os vetores entrada e disponivel para saber o que calcular
+//Verifica os vetores entrada para saber o que calcular
 void *threadCalcPrimo(void *w)
 {
+	//Variaveis locais
 	unsigned long int n;
 	int indiceLocal;
 	char naoPrimo = 0;
 
-	int* pointerNum = (int*)w;
-	int id = *pointerNum;
-
 	while(1)
 	{
 		
-		printf("Antes do Lock 1 da thread %d\n" , id);
+		//Trava as threads para leitura e escrita em memoria critica
 		pthread_mutex_lock(&trava);
-
-		printf("Indice = %d\n", indice);
 
 		if(indice >= numAteEntao) break;
 
@@ -119,10 +109,8 @@ void *threadCalcPrimo(void *w)
 		indiceLocal = indice;
 		indice++;
 
-		printf("A thread %d esta tratando o numero %lu\n", id , n);
-			
+		//Fim da area critica, inicio da area local de calculo de primalidade	
 		pthread_mutex_unlock(&trava);
-		printf("Depois do Lock 1 da thread %d\n" , id);
 
 		naoPrimo = 0;
 
@@ -141,14 +129,15 @@ void *threadCalcPrimo(void *w)
 		// 1 = Nao eh primo
 		// 0 = Eh primo
 
-		printf("Antes do Lock 2 da thread %d\n" , id);
+		//Area critica, memoria compartilhada
 		pthread_mutex_lock(&trava);
 
 		if(naoPrimo == 0){ entrada[indiceLocal] = 1;}
 		else {entrada[indiceLocal] = 0;}
 
+		//Fim da area critica
 		pthread_mutex_unlock(&trava);
-		printf("Depois do Lock 2  da thread %d\n" , id);
+		
 
 	}
 
