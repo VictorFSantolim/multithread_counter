@@ -9,90 +9,80 @@
  */
 
 #include <stdio.h>
-#include <stdint.h>
-#include <math.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <unistd.h>
 #include <stdlib.h>
+#include <pthread.h>
 
 
 //Numero maximo de threads que calculam primalidade
 #define N_THREADS 4
 
 //Prototipo da funcao que os threads executam
-void threadCalcPrimo( TODO  );
+void *threadCalcPrimo(void *w);
+
+unsigned long int entrada[100];
+char disponivel[100];
+int numAteEntao = 0;
+int indice = 0;
+pthread_mutex_t trava;
 
 int main() {
 
 	pthread_t threads[THREADS]; //Vetor de threads que calculam nùmeros primos
 	unsigned long int numLido; //Leitura atual
 
-    int threadsAteEntao = 0; //Filhos criados ate o momento
-    char resPrim;			 //Resultado do teste de primalidade de que uma thread fez
     int numPrimos = 0;		 //Numero de primos contado ate o momento
+    int threadsCriadas = 0;
 
+    //Zera os vetores iniciais
+    for(int i = 0 ; i < 100; i++)
+    {
+    	entrada[i] = 0;
+    	disponivel[i] = 0;
+    }
+
+    //Pega os números da entrada e coloca na memória
 	do
 	{
        scanf("%lu", &numLido); //Pega um numero da entrada
 
-       //Cria novos filhos caso ainda existam menos que N_FILHOS
-       if(filhosAteEntao < N_FILHOS)
-       {
-       		//Cria o filho
-       		filhos[filhosAteEntao] = fork();
-
-       		//Erro
-	    	if(filhos[filhosAteEntao] < 0)
-	    	{
-	    		printf("Erro no fork do filho %d\n", filhosAteEntao);
-	    		return -1;
-	    	}
-
-	    	//Processo filho
-	    	else if(filhos[filhosAteEntao] == 0)
-	    	{
-	    		
-	    		//Inicializa um filho, que calcula primalidades
-	    		filhoCalcPrimo(filhoParaPai , paiParaFilho , filhosAteEntao + 1);
-	    	}
-	    	//Processo pai
-	    	else
-	    	{
-	    		filhosAteEntao++;
-	    	}
-
-       }
+       entrada[numAteEntao] = numLido;
+       disponivel[numAteEntao] = 1;
+       numAteEntao++;
 
 	}while(getchar() != 10); //Enquanto nao pega um \n
 
 
-	//Fecha as streams nao usadas pelo pai
-	close(paiParaFilho[0]);
-   	close(filhoParaPai[1]);
-	    		
+	//Cria as threads
+  	if(numAteEntao < N_THREADS)
+  	{
+  		for(int i = 0 ; i < numAteEntao ; i++)
+  		{
+  			pthread_create(&(threads[i]), NULL, threadCalcPrimo, NULL);
+  		}
+  		threadsCriadas = numAteEntao;
+  	}
+  	else
+  	{
+  		for(int i = 0 ; i < N_THREADS ; i++)
+  		{
+  			pthread_create(&(threads[i]), NULL, threadCalcPrimo, NULL);
+  		}
+  		threadsCriadas = N_THREADS;
+  	}
 
-	//Fecha a escrita na pipe do pai para filho, o que sinaliza aos filhos
-	//que podem parar de tentar ler novos numeros e podem encerrar.
-	close(paiParaFilho[1]);
 
 
-	//Aguarda o encerramento de todos os processos filhos
-  	for(int i = 0; i < filhosAteEntao; i++) 
-    	waitpid(filhos[i], NULL, 0);
+	/* Esperando threads */
+  	for (int i = 0; i < threadsCriadas; i++) 
+  	{
+    	pthread_join(threadCalcPrimo[i], NULL);
+	}
 
-    //Le as informacoes que os filhos colocaram na pipe, referente aos
-    //resultados dos testes de primalidade
-    while(read(filhoParaPai[0], &resPrim, 1) > 0) 
+    //Le o vetor com os resultados de primalidade
+    for(int i = 0 ; i < numAteEntao ; i++)
     {
-      
-      //A cada zero recebido , acrescenta o numero de primos
-      if(resPrim == 0) numPrimos++;
-      
+    	if(entrada[i] == 1) numPrimos++;
     }
-
-    //Por fim, fecha a pipe de leitura dos dos filhos para o pai
-    close(filhoParaPai[0]);
 
     //Imprime o resultado final e retorna
     printf("%d\n", numPrimos);
@@ -101,22 +91,31 @@ int main() {
 
 }
 
-//Funcao que eh executada nos processos filhos
-//Recebe os pipes de comunicacao interprocesso cradas
-void filhoCalcPrimo(int filhoParaPai[2] , int paiParaFilho[2] , int numFilho)
+//Funcao que eh executada nos threads
+//Verifica os vetores entrada e disponivel para saber o que calcular
+void *threadCalcPrimo(void *w)
 {
 	unsigned long int n;
+	int indiceLocal;
 	char naoPrimo = 0;
 
-	//Fecha as extremidades das pipe que nao serao utilizadas
-	close(filhoParaPai[0]);
-	close(paiParaFilho[1]);
-
-	//Tenta realizar a leitura de novos numeros no pipe
-	//Se houver, verifica se eh primo
-	while(read(paiParaFilho[0] , &n , 8) > 0)
+	while(1)
 	{
 		
+		pthread_mutex_lock(&trava);
+
+			if(indice + 1 == numAteEntao) break;
+
+			if(disponivel[indice] == 1)
+			{
+				disponivel[indice] == 0;
+				n = entrada[indice];
+				indiceLocal = indice;
+				indice++;
+			}
+
+		pthread_mutex_unlock(&trava);
+
 		naoPrimo = 0;
 
 		//Se for 0 ou 1, nao eh primo
@@ -137,6 +136,6 @@ void filhoCalcPrimo(int filhoParaPai[2] , int paiParaFilho[2] , int numFilho)
 		write(filhoParaPai[1] , &naoPrimo, 1);
 	}
 
-	//Finaliza o processo
-	exit(1);
+	//Finaliza a thread
+	return NULL;
 }
