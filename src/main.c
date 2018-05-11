@@ -19,7 +19,7 @@
 //Prototipo da funcao que os threads executam
 void *threadCalcPrimo(void *w);
 
-unsigned long int entrada[500];
+unsigned long int entrada[100];
 int numAteEntao = 0;
 int indice = 0;
 pthread_mutex_t trava;
@@ -33,7 +33,7 @@ int main() {
     int threadsCriadas = 0;  //Threads criadas
 
     //Zera o vetor inicial
-    for(int i = 0 ; i < 500; i++)
+    for(int i = 0 ; i < 100; i++)
     {
     	entrada[i] = 0;
     }
